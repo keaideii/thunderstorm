@@ -1,26 +1,25 @@
 # encoding=utf-8
 
-import numpy as np
 import pandas as pd
 from pandas import Series
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime,timedelta
-from Ellipse import Ellipse
-import os
+from Ellipse import *
+from pandas import DataFrame
 
 centerDtype=[("x","f4"),("y","f4")]
 
 class Recognize(object):
-    def __init__(self,dataDir,timeSpan=10,eps=0.3,min_samples=5):
+    def __init__(self,dataDir,timeSpan=10,eps=0.1,min_samples=30):
         self.data0,self.timeLen = Recognize.preProcess(dataDir,timeSpan) #df,timeSeq,timeLen
         self.data_tran = StandardScaler().fit_transform(np.array(self.data0[["x","y"]]))
         self.span = timeSpan
         self.eps = eps
         self.min_samples = min_samples
-        self.clusterData = np.array([np.nan]*4) #"tIdx":[data(exclude -1 label),label]
-        self.center = np.array([np.nan]*5) # x,y,size,ID,frameID
-        self.ellipse = np.array([np.nan]*7) # a is the longer axis and b is the shorter
+        self.clusterData = DataFrame() #"tIdx":[data(exclude -1 label),label]
+        self.center = [] # x,y,size,clusterID,frameID
+        self.ellipse = [] # a is the longer axis and b is the shorter
 
     def seqCluster(self):
         tl = self.timeLen
@@ -28,34 +27,33 @@ class Recognize(object):
         for i in range(tl):
             idx = [ii for ii,seg in enumerate(ts) if seg==i] #generate idx
             data = np.array(self.data_tran[idx,:])
-            if(len(data) > 1.5*self.min_samples):
-                center = [] # x,y,size,ID,frameID
-                ellipse = []
-                cluData = []
+            data_temp = self.data0.loc[idx,["x","y"]]
+            if(len(data) > 1.2*self.min_samples):
                 db = DBSCAN(eps=self.eps, min_samples=self.min_samples).fit(data)
                 labels = db.labels_
                 core_label = labels[labels!=-1] # store
-                data_ori = self.data0.loc[idx,["x","y"]].loc[labels!=-1,:] # store
+                data_ori = data_temp.loc[labels!=-1,:] # store
                 grouped = data_ori.groupby(core_label)
                 xy = grouped.mean()
-                ell = grouped.apply(lambda x:Ellipse.fit_ellipse(np.array(x)))
-                for i in xy.index:
-                    center.append([xy.iloc[i,0],xy.iloc[i,1],Ellipse.calSize(ell[i])])
-                    ellipse.append(list(ell[i]))
-                    cluData.append(np.array(data_ori.loc[core_label==i]))
-                    self.test = np.vstack((self.test,np.array(data_ori)))
+                data_temp['cluID'] = labels ## also include -1 clu
+                data_temp['frameID'] = i
+                ell = grouped.apply(lambda x:fit_ellipse(np.array(x)))
+                for cluIdx in xy.index:
+                    self.center.append([xy.iloc[cluIdx,0],xy.iloc[cluIdx,1],calSize(ell[cluIdx]),cluIdx,i])  # x,y,size,cluID,frameID
+                    self.ellipse.append(list(ell[cluIdx])+[cluIdx,i])
+                    self.clusterData = pd.concat([self.clusterData,data_temp])
             else:
-                center,ellipse,cluData = 0,0,0
-            self.clusterData.append(cluData)
-            self.center.append(center)
-            self.ellipse.append(ellipse)
+                self.center.append([-1,-1,-1,-1,i])  # x,y,size,ID,frameID
+                self.ellipse.append([-1,-1,-1,-1,-1,-1,i])
+                data_temp['cluID'] = -1
+                data_temp['frameID'] = i
+                self.clusterData = pd.concat([self.clusterData,data_temp])
 
-    def saveData(self):
-        import hickle as hkl
-        # hkl.dump(self.clusterData,"clusterData.hkl")
-        # hkl.dump(self.center,"center.hkl")
-        # hkl.dump(self.ellipse,"ellipse.hkl")
-        hkl.dump(self.test,"test.hkl")
+
+    def saveData(self,dir):
+        DataFrame(self.center).to_csv(dir+"center.csv")
+        DataFrame(self.ellipse).to_csv(dir+"ellipse.csv")
+        DataFrame(self.clusterData).to_csv(dir+"clusterData.csv")
 
     @staticmethod
     def preProcess(dir,span):
@@ -94,11 +92,12 @@ class Recognize(object):
 
 ############################################################
 if __name__=="__main__":
-    dir = r'C:\Users\Administrator\desktop\StormCloud\nanrui_root.csv'
-    os.chdir(r'C:\Users\Administrator\desktop\StormCloud')
-    a = Recognize(dir,10)
+    dir = r'C:\Users\76999\Desktop\StormCloud\\'
+    # os.chdir(r'C:\Users\Administrator\desktop\StormCloud')
+    a = Recognize(dir+"nanrui_root.csv",10)
     a.seqCluster()
-    print a.test
-    a.saveData()
+    dir2 = r"D:\workspace\idea\thunderstorm\data\\"
+    a.saveData(dir2)
+
 
 
