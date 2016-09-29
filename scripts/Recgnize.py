@@ -5,13 +5,12 @@ from pandas import Series
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime,timedelta
-from Ellipse import *
+from ellipse import *
 from pandas import DataFrame
 
-centerDtype=[("x","f4"),("y","f4")]
 
 class Recognize(object):
-    def __init__(self,dataDir,timeSpan=10,eps=0.1,min_samples=30):
+    def __init__(self,dataDir,timeSpan=10,eps=0.1,min_samples=50):
         self.data0,self.timeLen = Recognize.preProcess(dataDir,timeSpan) #df,timeSeq,timeLen
         self.data_tran = StandardScaler().fit_transform(np.array(self.data0[["x","y"]]))
         self.span = timeSpan
@@ -28,14 +27,17 @@ class Recognize(object):
             idx = [ii for ii,seg in enumerate(ts) if seg==i] #generate idx
             data = np.array(self.data_tran[idx,:])
             data_temp = self.data0.loc[idx,["x","y"]]
-            if(len(data) > 1.2*self.min_samples):
+            if(len(data) > 1.0*self.min_samples):
                 db = DBSCAN(eps=self.eps, min_samples=self.min_samples).fit(data)
                 labels = db.labels_
                 core_label = labels[labels!=-1] # store
+                core_samples = np.zeros_like(labels,dtype=bool)
+                core_samples[db.core_sample_indices_] = True
                 data_ori = data_temp.loc[labels!=-1,:] # store
                 grouped = data_ori.groupby(core_label)
                 xy = grouped.mean()
                 data_temp['cluID'] = labels ## also include -1 clu
+                data_temp['if_core'] = core_samples
                 data_temp['frameID'] = i
                 ell = grouped.apply(lambda x:fit_ellipse(np.array(x)))
                 for cluIdx in xy.index:
@@ -46,14 +48,15 @@ class Recognize(object):
                 self.center.append([-1,-1,-1,-1,i])  # x,y,size,ID,frameID
                 self.ellipse.append([-1,-1,-1,-1,-1,-1,i])
                 data_temp['cluID'] = -1
+                data_temp['if_core'] = False
                 data_temp['frameID'] = i
                 self.clusterData = pd.concat([self.clusterData,data_temp])
 
 
     def saveData(self,dir):
-        DataFrame(self.center).to_csv(dir+"center.csv")
-        DataFrame(self.ellipse).to_csv(dir+"ellipse.csv")
-        DataFrame(self.clusterData).to_csv(dir+"clusterData.csv")
+        DataFrame(self.center).to_csv(dir+"center.csv",index=False,columns=None)
+        DataFrame(self.ellipse).to_csv(dir+"ellipse.csv",index=False,columns=None)
+        DataFrame(self.clusterData).to_csv(dir+"clusterData.csv",index=False,columns=None)
 
     @staticmethod
     def preProcess(dir,span):
@@ -92,11 +95,13 @@ class Recognize(object):
 
 ############################################################
 if __name__=="__main__":
-    dir = r'C:\Users\76999\Desktop\StormCloud\\'
+    # dir = r'C:\Users\76999\Desktop\StormCloud\\'
+    dir = r'C:\Users\Administrator\desktop\StormCloud\\'
     # os.chdir(r'C:\Users\Administrator\desktop\StormCloud')
     a = Recognize(dir+"nanrui_root.csv",10)
     a.seqCluster()
-    dir2 = r"D:\workspace\idea\thunderstorm\data\\"
+    # dir2 = r"D:\workspace\idea\thunderstorm\data\\"
+    dir2 = r'F:\gitInStormor\thunderstorm\data\\'
     a.saveData(dir2)
 
 
