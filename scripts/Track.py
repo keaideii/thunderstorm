@@ -68,10 +68,10 @@ class Track(object):
             preds = self.predict_cells(track)
             self.tracks[trackID][-1]['f_x'] = preds[0]
             self.tracks[trackID][-1]['f_y'] = preds[1]
-            self.tracks[trackID][-1]['f_size'] = preds[2]
+            self.tracks[trackID][-1]['f_size'] = preds[2] if preds[2]>0 else 0
             currStorms[i]['f_x'] = preds[0]
             currStorms[i]['f_y'] = preds[1]
-            currStorms[i]['f_size'] = preds[2]
+            currStorms[i]['f_size'] = preds[2] if preds[2]>0 else 0
 
         # for i,_ in start.items():
         #     trackID = len(self.tracks)
@@ -225,9 +225,13 @@ class Track(object):
         res = np.array(temp,dtype=storm_dtype)
         return res
 
-    def save(self):
+    def save(self,expandFab=True):
         res = DataFrame(self.flatTracks())
         res = res.loc[res.x!=-1,:]
+        if expandFab: ## predict ab
+            ratio = np.sqrt(res['f_size']/res['size'])
+            res['f_a'] = ratio*res['a']
+            res['f_b'] = ratio*res['b']
         res.to_csv("tracks.csv",index=False)
 
     def flatTracks(self):
@@ -243,32 +247,27 @@ class Track(object):
 
 
 
+
+
 if __name__=="__main__":
     os.chdir(r"F:\gitInStormor\thunderstorm\data")
     center = pd.read_csv('center.csv')
     ellipse = pd.read_csv("ellipse.csv")
-    center.columns = ['x0','y0','size','cluID','frameID']
-    ellipse.columns = ['x0','y0','a','b','phi','cluID','frameID']
     staId = 47
     endId = 70
     center = center.loc[(center.frameID>=staId)&(center.frameID<=endId),:]
     ellipse = ellipse.loc[(ellipse.frameID>=staId)&(ellipse.frameID<=endId),:]
-    t = Track()
+    t = Track(c_thres=0.35,xy_weight=0.999,backN=3)
     frames = range(staId,endId+1)
     for i in frames:
         cen = np.array(center.loc[center.frameID==i,['x0','y0','size']])
         ell = np.array(ellipse.loc[ellipse.frameID==i,['a','b','phi','cluID','frameID']])
         corner = t.con2Tuple(cen,ell)
         t.track_step(corner)
-    # print t.merge
-    # print t.split
     t.save()
     t.flat_cell(t.mergeCell,'mergeCell.hkl')
     t.flat_cell(t.splitCell,'splitCell.hkl')
-    print t.merge
-    print t.mergeCell
-    print t.split
-    print t.splitCell
+
 
 
 

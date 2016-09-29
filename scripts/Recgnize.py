@@ -54,9 +54,10 @@ class Recognize(object):
 
 
     def saveData(self,dir):
-        DataFrame(self.center).to_csv(dir+"center.csv",index=False,columns=None)
-        DataFrame(self.ellipse).to_csv(dir+"ellipse.csv",index=False,columns=None)
+        DataFrame(self.center,columns=['x0','y0','size','cluID','frameID']).to_csv(dir+"center.csv",index=False)
+        DataFrame(self.ellipse,columns=['x0','y0','a','b','phi','cluID','frameID']).to_csv(dir+"ellipse.csv",index=False)
         DataFrame(self.clusterData).to_csv(dir+"clusterData.csv",index=False,columns=None)
+
 
     @staticmethod
     def preProcess(dir,span):
